@@ -1,60 +1,52 @@
-//Minimal Precaching & Runtime Caching ServiceWorker
+var GHPATH = '/github-page-pwa';
+var APP_PREFIX = 'gppwa_';
+var VERSION = 'version_002';
+var URLS = [    
+  `${GHPATH}/`,
+  `${GHPATH}/index.html`,
+  `${GHPATH}/css/styles.css`,
+  `${GHPATH}/img/icon.png`,
+  `${GHPATH}/js/app.js`
+]
 
-//https://developers.google.com/web/ilt/pwa/caching-files-with-service-worker
-//https://developers.google.com/web/ilt/pwa/lab-caching-files-with-service-worker
-//https://developer.mozilla.org/en-US/docs/Web/API/FetchEvent/respondWith
-//https://developer.mozilla.org/en-US/docs/Web/API/ExtendableEvent/waitUntil
-
-const filesToCache = [
-          'style.css',
-          'index.html',
-          'manifest.json',
-          'maskable_icon.png',
-          'icon_512.png',
-          'favicon.ico',
-          'script.js'
-        ];
-
-//IMPORTANT this needs to change eveytime you make changes ANY file of the website, then reload the browser
-//You can enable skip cache for netwoek in the netwoek panel in chrome dev tools
-const staticCacheName = 'sampe-v13';
-
-
-//Setting up precaching
-self.addEventListener('install', async event => {
-  // console.log('Attempting to install service worker and cache static assets');
-  
-  self.skipWaiting();
-
-  //create preCache
-  const precache = async()=>{
-    const cache = await caches.open(staticCacheName);
-    return cache.addAll(filesToCache);
-  }
-  
-  //do not finish install until precaching is complete
-  event.waitUntil(precache());
-});
-
-//clears any old caches
-self.addEventListener('activate', event => {
-
-  const clearCaches = async ()=>{
-    const keys = await caches.keys();
-    const oldKeys = keys.filter(key => key !== staticCacheName);
-    const promises = oldKeys.map(key=>caches.delete(key));
-    return Promise.all(promises);
-  }
-
-  event.waitUntil(clearCaches());
-
-});
-
-//intercepts request and responds with any cached responses.
-self.addEventListener('fetch', function(event) {
-  event.respondWith(
-    caches.match(event.request).then(function(response) {
-      return response || fetch(event.request);
+var CACHE_NAME = APP_PREFIX + VERSION
+self.addEventListener('fetch', function (e) {
+  console.log('Fetch request : ' + e.request.url);
+  e.respondWith(
+    caches.match(e.request).then(function (request) {
+      if (request) { 
+        console.log('Responding with cache : ' + e.request.url);
+        return request
+      } else {       
+        console.log('File is not cached, fetching : ' + e.request.url);
+        return fetch(e.request)
+      }
     })
-  );
-});
+  )
+})
+
+self.addEventListener('install', function (e) {
+  e.waitUntil(
+    caches.open(CACHE_NAME).then(function (cache) {
+      console.log('Installing cache : ' + CACHE_NAME);
+      return cache.addAll(URLS)
+    })
+  )
+})
+
+self.addEventListener('activate', function (e) {
+  e.waitUntil(
+    caches.keys().then(function (keyList) {
+      var cacheWhitelist = keyList.filter(function (key) {
+        return key.indexOf(APP_PREFIX)
+      })
+      cacheWhitelist.push(CACHE_NAME);
+      return Promise.all(keyList.map(function (key, i) {
+        if (cacheWhitelist.indexOf(key) === -1) {
+          console.log('Deleting cache : ' + keyList[i] );
+          return caches.delete(keyList[i])
+        }
+      }))
+    })
+  )
+})
